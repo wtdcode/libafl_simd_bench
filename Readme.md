@@ -2,7 +2,7 @@
 
 Benchmark coverage map (Max Reducer) using naive, `std::simd` and `wide`.
 
-CPU is i9-13900K with 64G memory. Coverage map is `2097152` and repeat `655365` rounds, i.e.
+CPU is i9-13900K with 64G memory. Coverage map is `2097152` and repeat `32768` rounds, i.e.
 
 ```bash
 tasket -c 3 ./target/release/libafl_simd_bench -m 2097152 -r 32768
