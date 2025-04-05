@@ -28,4 +28,10 @@ On Oracle 4C24G aarch64 machine with `8192` repetitions.
 |-|-|-|-|
 |12.641|2.620|2.674|2.870|
 
+On m2 pro with `16384` repetitions.
+
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
+|-|-|-|-|
+|21.756|3.905|4.119|5.003|
+
 To check correctness, build it with `cargo build --release --features correctness`
