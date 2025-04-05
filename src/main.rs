@@ -118,7 +118,7 @@ fn afl_stable_wide_128<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<us
             let history =
                 VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
             let items =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
 
             if items.max(history) != history {
                 interesting = true;
@@ -148,7 +148,7 @@ fn afl_stable_wide_128<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<us
             let history =
                 VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
             let items =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
 
             if items.max(history) != history {
                 interesting = true;
@@ -187,7 +187,7 @@ fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<us
             let history =
                 VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
             let items =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
 
             if items.max(history) != history {
                 interesting = true;
@@ -217,7 +217,7 @@ fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<us
             let history =
                 VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
             let items =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
 
             if items.max(history) != history {
                 interesting = true;
@@ -319,8 +319,24 @@ where
     clean_vectors(hist);
     for _ in 0..rounds {
         random_bits(map, rng);
-        let (elp, _, _) = measure(f, hist, map);
-        outs.push(elp);
+        #[cfg(feature = "correctness")]
+        {
+            let (elp, interesting, nov) = measure(f, hist, map);
+            let (_, canonical_interesting, canonical_nov) = measure(
+                afl_default_impl::<true, MaxReducer, DifferentIsNovel>,
+                hist,
+                map
+            );
+            if interesting != canonical_interesting || nov != canonical_nov {
+                panic!("Incorrect! {} vs {}, {:?} vs {:?}", interesting, canonical_interesting, nov, canonical_nov);
+            }
+            outs.push(elp);
+        }
+        #[cfg(not(feature = "correctness"))]
+        {
+            let (elp, _, _) = measure(f, hist, map);
+            outs.push(elp);
+        }
     }
     outs
 }
@@ -356,6 +372,8 @@ fn main() {
         let _ = afl_default_impl::<false, MaxReducer, DifferentIsNovel>(&hist, &map);
     }
 
+    println!("Naive implmentation...");
+    #[cfg(not(feature = "correctness"))]
     let default_no_novel = measure_one(
         afl_default_impl::<false, MaxReducer, DifferentIsNovel>,
         &mut hist,
@@ -370,6 +388,8 @@ fn main() {
         &mut rand,
         args.rounds,
     );
+    println!("std::simd implmentation...");
+    #[cfg(not(feature = "correctness"))]
     let libafl_simd_no_novel = measure_one(
         afl_nightly_simd::<false>,
         &mut hist,
@@ -384,6 +404,8 @@ fn main() {
         &mut rand,
         args.rounds,
     );
+    println!("wide128 implmentation...");
+    #[cfg(not(feature = "correctness"))]
     let wide128_no_novel = measure_one(
         afl_stable_wide_128::<false>,
         &mut hist,
@@ -398,6 +420,8 @@ fn main() {
         &mut rand,
         args.rounds,
     );
+    println!("wide256 implmentation...");
+    #[cfg(not(feature = "correctness"))]
     let wide256_no_novel = measure_one(
         afl_stable_wide_256::<false>,
         &mut hist,
@@ -413,12 +437,16 @@ fn main() {
         args.rounds,
     );
 
+    #[cfg(not(feature = "correctness"))]
     printout("default_no_novel", default_no_novel);
     printout("default_novel", default_novel);
+    #[cfg(not(feature = "correctness"))]
     printout("libafl_simd_no_novel", libafl_simd_no_novel);
     printout("libafl_simd_novel", libafl_simd_novel);
+    #[cfg(not(feature = "correctness"))]
     printout("wide128_no_novel", wide128_no_novel);
     printout("wide128_novel", wide128_novel);
+    #[cfg(not(feature = "correctness"))]
     printout("wide256_no_novel", wide256_no_novel);
     printout("wide256_novel", wide256_novel);
 }

@@ -12,12 +12,14 @@ Results of total running time (lower is btter):
 
 Compile with just `cargo build --release`
 
-|Naive|`std::simd`|`wide::u8x16`|`wide::u8x32`|
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|16.595|9.461|0.777|0.389|
+|16.980|9.939|9.787|13.911|
 
 Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 
-|Naive|`std::simd`|`wide::u8x16`|`wide::u8x32`|
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|16.627|9.465|0.777|0.389|
+|17.235|10.068|10.049|13.635|
+
+To check correctness, build it with `cargo build --release --features correctness`
