@@ -22,6 +22,8 @@ Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 |-|-|-|-|
 |17.235|10.068|10.049|13.635|
 
+(what's wrong with my cpu ?!)
+
 On another AMD EPYC 7B13:
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
