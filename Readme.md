@@ -22,6 +22,12 @@ Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 |-|-|-|-|
 |17.235|10.068|10.049|13.635|
 
+On another AMD EPYC 7B13:
+
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
+|-|-|-|-|
+|24.871|16.060|16.515|17.698|
+
 On Oracle 4C24G aarch64 machine with `8192` repetitions.
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
