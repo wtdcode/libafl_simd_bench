@@ -22,6 +22,14 @@ Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 |-|-|-|-|
 |17.235|10.068|10.049|13.635|
 
+## Benchmarks On Other Machines
+
+On i9-14900K:
+
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
+|-|-|-|-|
+|16.258|9.799|9.837|13.491|
+
 On 5900X with 16GB memory:
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
@@ -40,7 +48,7 @@ On Oracle 4C24G aarch64 machine with `8192` repetitions.
 |-|-|-|-|
 |12.641|2.620|2.674|2.870|
 
-On m2 pro with `16384` repetitions.
+On m2 pro with `16384` repetitions (macOS doesn't us to bind to a single core so the results might be not accurate)
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
