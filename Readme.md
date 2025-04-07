@@ -22,7 +22,11 @@ Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 |-|-|-|-|
 |17.235|10.068|10.049|13.635|
 
-(what's wrong with my cpu ?!)
+On 5900X with 16GB memory:
+
+|Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
+|-|-|-|-|
+|18.140|13.124|12.303|16.513|
 
 On another AMD EPYC 7B13:
 
