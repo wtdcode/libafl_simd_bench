@@ -192,7 +192,14 @@ fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<us
             if items.max(history) != history {
                 interesting = true;
                 unsafe {
-                    for j in i..(i + VectorType::LANES as usize) {
+                    for j in i..(i + VectorType::LANES as usize / 2) {
+                        let item = *map.get_unchecked(j);
+                        if item > *hist.get_unchecked(j) {
+                            novelties.push(j);
+                        }
+                    }
+
+                    for j in (i + VectorType::LANES as usize / 2)..(i + VectorType::LANES as usize) {
                         let item = *map.get_unchecked(j);
                         if item > *hist.get_unchecked(j) {
                             novelties.push(j);
