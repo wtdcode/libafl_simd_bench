@@ -171,10 +171,10 @@ pub fn afl_stable_wide_128<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Ve
 
 
 pub fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>) {
-    type VectorType = wide::u32x4;
+    type VectorType = wide::u8x32;
     let mut novelties = vec![];
     let mut interesting = false;
-    const bs: usize =  4 * VectorType::LANES as usize;
+    const bs: usize =  VectorType::LANES as usize;
     let size = map.len();
     let steps = size / bs;
     let left = size % bs;
@@ -185,9 +185,9 @@ pub fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Ve
             let i = step * bs;
             let buf: [u8; bs] = hist[i..i+bs].try_into().unwrap();
             let history =
-                VectorType::new(unsafe {std::mem::transmute(buf)});
+                VectorType::new(buf);
             let buf: [u8; bs] = map[i..i+bs].try_into().unwrap();
-            let items = VectorType::new(unsafe {std::mem::transmute(buf)});
+            let items = VectorType::new(buf);
 
             if items.max(history) != history {
                 interesting = true;
