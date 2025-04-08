@@ -1,283 +1,13 @@
-#![feature(portable_simd)]
-
 use chrono::Utc;
 use clap::Parser;
+use counts::afl_simplify_trace_naive;
 use itertools::Itertools;
 use rand::{RngCore, rngs::ThreadRng};
-use std::simd::cmp::SimdOrd;
 
-struct MaxReducer {}
+use libafl_simd_bench::counts::*;
+use libafl_simd_bench::cov::*;
 
-trait Reducer<T> {
-    fn reduce(first: T, second: T) -> T;
-}
-
-impl<T> Reducer<T> for MaxReducer
-where
-    T: PartialOrd,
-{
-    #[inline]
-    fn reduce(first: T, second: T) -> T {
-        if first > second { first } else { second }
-    }
-}
-
-pub struct DifferentIsNovel {}
-
-trait IsNovel<T> {
-    fn is_novel(old: T, new: T) -> bool;
-}
-
-impl<T> IsNovel<T> for DifferentIsNovel
-where
-    T: PartialEq + Default + Copy + 'static,
-{
-    #[inline]
-    fn is_novel(old: T, new: T) -> bool {
-        old != new
-    }
-}
-
-fn afl_nightly_simd<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>) {
-    type VectorType = core::simd::u8x16;
-    let mut novelties = vec![];
-    let mut interesting = false;
-    let size = map.len();
-    let steps = size / VectorType::LEN;
-    let left = size % VectorType::LEN;
-
-    if NV {
-        novelties.clear();
-        for step in 0..steps {
-            let i = step * VectorType::LEN;
-            let history = VectorType::from_slice(&hist[i..]);
-            let items = VectorType::from_slice(&map[i..]);
-
-            if items.simd_max(history) != history {
-                interesting = true;
-                unsafe {
-                    for j in i..(i + VectorType::LEN) {
-                        let item = *map.get_unchecked(j);
-                        if item > *hist.get_unchecked(j) {
-                            novelties.push(j);
-                        }
-                    }
-                }
-            }
-        }
-
-        for j in (size - left)..size {
-            unsafe {
-                let item = *map.get_unchecked(j);
-                if item > *hist.get_unchecked(j) {
-                    interesting = true;
-                    novelties.push(j);
-                }
-            }
-        }
-    } else {
-        for step in 0..steps {
-            let i = step * VectorType::LEN;
-            let history = VectorType::from_slice(&hist[i..]);
-            let items = VectorType::from_slice(&map[i..]);
-
-            if items.simd_max(history) != history {
-                interesting = true;
-                break;
-            }
-        }
-
-        if !interesting {
-            for j in (size - left)..size {
-                unsafe {
-                    let item = *map.get_unchecked(j);
-                    if item > *hist.get_unchecked(j) {
-                        interesting = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    (interesting, novelties)
-}
-
-fn afl_stable_wide_128<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>) {
-    type VectorType = wide::u8x16;
-    let mut novelties = vec![];
-    let mut interesting = false;
-    let size = map.len();
-    let steps = size / VectorType::LANES as usize;
-    let left = size % VectorType::LANES as usize;
-
-    if NV {
-        novelties.clear();
-        for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
-            let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items =
-                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
-
-            if items.max(history) != history {
-                interesting = true;
-                unsafe {
-                    for j in i..(i + VectorType::LANES as usize) {
-                        let item = *map.get_unchecked(j);
-                        if item > *hist.get_unchecked(j) {
-                            novelties.push(j);
-                        }
-                    }
-                }
-            }
-        }
-
-        for j in (size - left)..size {
-            unsafe {
-                let item = *map.get_unchecked(j);
-                if item > *hist.get_unchecked(j) {
-                    interesting = true;
-                    novelties.push(j);
-                }
-            }
-        }
-    } else {
-        for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
-            let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items =
-                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
-
-            if items.max(history) != history {
-                interesting = true;
-                break;
-            }
-        }
-
-        if !interesting {
-            for j in (size - left)..size {
-                unsafe {
-                    let item = *map.get_unchecked(j);
-                    if item > *hist.get_unchecked(j) {
-                        interesting = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    (interesting, novelties)
-}
-
-fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>) {
-    type VectorType = wide::u8x32;
-    let mut novelties = vec![];
-    let mut interesting = false;
-    let size = map.len();
-    let steps = size / VectorType::LANES as usize;
-    let left = size % VectorType::LANES as usize;
-
-    if NV {
-        novelties.clear();
-        for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
-            let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items =
-                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
-
-            if items.max(history) != history {
-                interesting = true;
-                unsafe {
-                    for j in i..(i + VectorType::LANES as usize / 2) {
-                        let item = *map.get_unchecked(j);
-                        if item > *hist.get_unchecked(j) {
-                            novelties.push(j);
-                        }
-                    }
-
-                    for j in (i + VectorType::LANES as usize / 2)..(i + VectorType::LANES as usize) {
-                        let item = *map.get_unchecked(j);
-                        if item > *hist.get_unchecked(j) {
-                            novelties.push(j);
-                        }
-                    }
-                }
-            }
-        }
-
-        for j in (size - left)..size {
-            unsafe {
-                let item = *map.get_unchecked(j);
-                if item > *hist.get_unchecked(j) {
-                    interesting = true;
-                    novelties.push(j);
-                }
-            }
-        }
-    } else {
-        for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
-            let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items =
-                VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
-
-            if items.max(history) != history {
-                interesting = true;
-                break;
-            }
-        }
-
-        if !interesting {
-            for j in (size - left)..size {
-                unsafe {
-                    let item = *map.get_unchecked(j);
-                    if item > *hist.get_unchecked(j) {
-                        interesting = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    (interesting, novelties)
-}
-
-fn afl_default_impl<const NV: bool, R, N>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>)
-where
-    R: Reducer<u8>,
-    N: IsNovel<u8>,
-{
-    let mut novelties = vec![];
-    let mut interesting = false;
-    let initial = 0;
-    if NV {
-        for (i, item) in map.iter().enumerate().filter(|(_, item)| **item != initial) {
-            let existing = unsafe { *hist.get_unchecked(i) };
-            let reduced = R::reduce(existing, *item);
-            if N::is_novel(existing, reduced) {
-                interesting = true;
-                novelties.push(i);
-            }
-        }
-    } else {
-        for (i, item) in map.iter().enumerate().filter(|(_, item)| **item != initial) {
-            let existing = unsafe { *hist.get_unchecked(i) };
-            let reduced = R::reduce(existing, *item);
-            if N::is_novel(existing, reduced) {
-                interesting = true;
-                break;
-            }
-        }
-    }
-
-    (interesting, novelties)
-}
+mod counts;
 
 #[derive(Parser)]
 struct CLI {
@@ -285,9 +15,11 @@ struct CLI {
     pub map: usize,
     #[arg(short, long)]
     pub rounds: usize,
+    #[arg(short, long, default_value = "cov")]
+    pub program: String,
 }
 
-fn measure<F>(f: F, hist: &[u8], map: &[u8]) -> (chrono::TimeDelta, bool, Vec<usize>)
+fn measure_cov<F>(f: F, hist: &[u8], map: &[u8]) -> (chrono::TimeDelta, bool, Vec<usize>)
 where
     F: FnOnce(&[u8], &[u8]) -> (bool, Vec<usize>),
 {
@@ -295,6 +27,16 @@ where
     let (interesting, novs) = f(hist, map);
     let after = Utc::now();
     (after - before, interesting, novs)
+}
+
+fn measure_simpliy_counts<F>(f: F, map: &mut [u8]) -> chrono::TimeDelta
+where
+    F: FnOnce(&mut [u8]) -> (),
+{
+    let before = Utc::now();
+    f(map);
+    let after = Utc::now();
+    after - before
 }
 
 fn random_bits(map: &mut [u8], rng: &mut ThreadRng) {
@@ -311,7 +53,7 @@ fn clean_vectors(map: &mut [u8]) {
     }
 }
 
-fn measure_one<F>(
+fn measure_rounds<F>(
     f: F,
     hist: &mut [u8],
     map: &mut [u8],
@@ -328,20 +70,58 @@ where
         random_bits(map, rng);
         #[cfg(feature = "correctness")]
         {
-            let (elp, interesting, nov) = measure(f, hist, map);
-            let (_, canonical_interesting, canonical_nov) = measure(
+            let (elp, interesting, nov) = measure_cov(f, hist, map);
+            let (_, canonical_interesting, canonical_nov) = measure_cov(
                 afl_default_impl::<true, MaxReducer, DifferentIsNovel>,
                 hist,
-                map
+                map,
             );
             if interesting != canonical_interesting || nov != canonical_nov {
-                panic!("Incorrect! {} vs {}, {:?} vs {:?}", interesting, canonical_interesting, nov, canonical_nov);
+                panic!(
+                    "Incorrect! {} vs {}, {:?} vs {:?}",
+                    interesting, canonical_interesting, nov, canonical_nov
+                );
             }
             outs.push(elp);
         }
         #[cfg(not(feature = "correctness"))]
         {
-            let (elp, _, _) = measure(f, hist, map);
+            let (elp, _, _) = measure_cov(f, hist, map);
+            outs.push(elp);
+        }
+    }
+    outs
+}
+
+fn measure_counts_rounds<F>(
+    f: F,
+    map: &mut [u8],
+    rng: &mut ThreadRng,
+    rounds: usize,
+) -> Vec<chrono::Duration>
+where
+    F: FnOnce(&mut [u8]) -> () + Copy,
+{
+    let mut outs = Vec::with_capacity(rounds);
+    clean_vectors(map);
+
+    for _ in 0..rounds {
+        random_bits(map, rng);
+        #[cfg(feature = "correctness")]
+        {
+            let mut canonical = map.to_vec();
+            let elp = measure_simpliy_counts(f, map);
+            afl_simplify_trace_naive(&mut canonical);
+
+            if map != &mut canonical {
+                panic!("Incorrect! {:?} vs {:?}", map, canonical);
+            }
+            outs.push(elp);
+        }
+
+        #[cfg(not(feature = "correctness"))]
+        {
+            let elp = measure_simpliy_counts(f, map);
             outs.push(elp);
         }
     }
@@ -374,86 +154,104 @@ fn main() {
     let mut hist = vec![0; args.map];
     let mut rand = rand::rng();
 
-    // bring two map into cache
-    for _ in 0..16 {
-        let _ = afl_default_impl::<false, MaxReducer, DifferentIsNovel>(&hist, &map);
+    if args.program == "cov" {
+        // bring two map into cache
+        for _ in 0..16 {
+            let _ = afl_default_impl::<false, MaxReducer, DifferentIsNovel>(&hist, &map);
+        }
+
+        println!("Naive implmentation...");
+        #[cfg(not(feature = "correctness"))]
+        let default_no_novel = measure_rounds(
+            afl_default_impl::<false, MaxReducer, DifferentIsNovel>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        let default_novel = measure_rounds(
+            afl_default_impl::<true, MaxReducer, DifferentIsNovel>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        println!("std::simd implmentation...");
+        #[cfg(not(feature = "correctness"))]
+        let libafl_simd_no_novel = measure_rounds(
+            afl_nightly_simd::<false>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        let libafl_simd_novel = measure_rounds(
+            afl_nightly_simd::<true>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        println!("wide128 implmentation...");
+        #[cfg(not(feature = "correctness"))]
+        let wide128_no_novel = measure_rounds(
+            afl_stable_wide_128::<false>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        let wide128_novel = measure_rounds(
+            afl_stable_wide_128::<true>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        println!("wide256 implmentation...");
+        #[cfg(not(feature = "correctness"))]
+        let wide256_no_novel = measure_rounds(
+            afl_stable_wide_256::<false>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+        let wide256_novel = measure_rounds(
+            afl_stable_wide_256::<true>,
+            &mut hist,
+            &mut map,
+            &mut rand,
+            args.rounds,
+        );
+
+        #[cfg(not(feature = "correctness"))]
+        printout("default_no_novel", default_no_novel);
+        printout("default_novel", default_novel);
+        #[cfg(not(feature = "correctness"))]
+        printout("libafl_simd_no_novel", libafl_simd_no_novel);
+        printout("libafl_simd_novel", libafl_simd_novel);
+        #[cfg(not(feature = "correctness"))]
+        printout("wide128_no_novel", wide128_no_novel);
+        printout("wide128_novel", wide128_novel);
+        #[cfg(not(feature = "correctness"))]
+        printout("wide256_no_novel", wide256_no_novel);
+        printout("wide256_novel", wide256_novel);
+    } else if args.program == "counts" {
+        println!("Naive simplify_counts...");
+        let simplify_naive =
+            measure_counts_rounds(afl_simplify_trace_naive, &mut map, &mut rand, args.rounds);
+        println!("wide128 simplify counts...");
+        let simplify_wide128 =
+            measure_counts_rounds(afl_simplify_trace_wide128, &mut map, &mut rand, args.rounds);
+        println!("wide256 simplify counts...");
+        let simplify_wide256 =
+                measure_counts_rounds(afl_simplify_trace_wide256, &mut map, &mut rand, args.rounds);
+    
+        printout("simplify_naive", simplify_naive);
+        printout("simplify_wide128", simplify_wide128);
+        printout("simplify_wide256", simplify_wide256);
+    } else {
+        panic!("no such bench {}", args.program);
     }
-
-    println!("Naive implmentation...");
-    #[cfg(not(feature = "correctness"))]
-    let default_no_novel = measure_one(
-        afl_default_impl::<false, MaxReducer, DifferentIsNovel>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    let default_novel = measure_one(
-        afl_default_impl::<true, MaxReducer, DifferentIsNovel>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    println!("std::simd implmentation...");
-    #[cfg(not(feature = "correctness"))]
-    let libafl_simd_no_novel = measure_one(
-        afl_nightly_simd::<false>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    let libafl_simd_novel = measure_one(
-        afl_nightly_simd::<true>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    println!("wide128 implmentation...");
-    #[cfg(not(feature = "correctness"))]
-    let wide128_no_novel = measure_one(
-        afl_stable_wide_128::<false>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    let wide128_novel = measure_one(
-        afl_stable_wide_128::<true>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    println!("wide256 implmentation...");
-    #[cfg(not(feature = "correctness"))]
-    let wide256_no_novel = measure_one(
-        afl_stable_wide_256::<false>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-    let wide256_novel = measure_one(
-        afl_stable_wide_256::<true>,
-        &mut hist,
-        &mut map,
-        &mut rand,
-        args.rounds,
-    );
-
-    #[cfg(not(feature = "correctness"))]
-    printout("default_no_novel", default_no_novel);
-    printout("default_novel", default_novel);
-    #[cfg(not(feature = "correctness"))]
-    printout("libafl_simd_no_novel", libafl_simd_no_novel);
-    printout("libafl_simd_novel", libafl_simd_novel);
-    #[cfg(not(feature = "correctness"))]
-    printout("wide128_no_novel", wide128_no_novel);
-    printout("wide128_novel", wide128_novel);
-    #[cfg(not(feature = "correctness"))]
-    printout("wide256_no_novel", wide256_no_novel);
-    printout("wide256_novel", wide256_novel);
 }
