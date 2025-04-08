@@ -37,3 +37,9 @@ On m2 pro with `16384` repetitions (potentially inaccurate results due to core b
 |21.590|4.410|4.388|4.329|
 
 To check correctness, build it with `cargo build --release --features correctness`
+
+To run miri:
+
+```
+MIRIFLAGS="-Zmiri-disable-isolation" cargo miri run -- -m 256 -r 256 -p cov
+```

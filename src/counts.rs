@@ -118,18 +118,21 @@ pub fn afl_simplify_trace_wide128(map: &mut [u8]) {
     }
 }
 
+
+
 pub fn afl_simplify_trace_wide256(map: &mut [u8]) {
-    type VectorType = wide::u8x32;
+    type VectorType = wide::u64x4;
     let size = map.len();
-    const bs: usize = VectorType::LANES as usize;
+    const bs: usize = 8 * VectorType::LANES as usize;
     let steps = size / bs;
     let left = size % bs;
-    let lhs = VectorType::new([0x1; bs]);
-    let rhs = VectorType::new([0x80; bs]);
+    let lhs = VectorType::new([0x01010101010101; 4]);
+    let rhs = VectorType::new([0x80808080808080; 4]);
 
     for step in 0..steps {
         let i = step * bs;
-        let mp = VectorType::new(map[i..(i+bs)].try_into().unwrap());
+        let buf: [u8; 32] = map[i..i+bs].try_into().unwrap();
+        let mp = VectorType::new(unsafe {std::mem::transmute::<[u8; 32], [u64; 4]>(buf)});
 
         let mask = mp.cmp_eq(VectorType::ZERO);
         // let out = lhs.blend(rhs, mask);
@@ -137,7 +140,7 @@ pub fn afl_simplify_trace_wide256(map: &mut [u8]) {
         // println!("out {}, lhs {}, rhs {}, mask {}", out, lhs, rhs, mask);
         // map[i..i + bs].copy_from_slice(out.as_array_ref());
         unsafe {
-            out.as_array_ref().as_ptr()
+            (out.as_array_ref().as_ptr() as *const u8)
                 .copy_to_nonoverlapping(map.as_mut_ptr().add(i), bs);
         }
     }

@@ -169,33 +169,37 @@ pub fn afl_stable_wide_128<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Ve
     (interesting, novelties)
 }
 
+
 pub fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Vec<usize>) {
-    type VectorType = wide::u8x32;
+    type VectorType = wide::u32x4;
     let mut novelties = vec![];
     let mut interesting = false;
+    const bs: usize =  4 * VectorType::LANES as usize;
     let size = map.len();
-    let steps = size / VectorType::LANES as usize;
-    let left = size % VectorType::LANES as usize;
-
+    let steps = size / bs;
+    let left = size % bs;
+    
     if NV {
         novelties.clear();
         for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
+            let i = step * bs;
+            let buf: [u8; bs] = hist[i..i+bs].try_into().unwrap();
             let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items = VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(unsafe {std::mem::transmute(buf)});
+            let buf: [u8; bs] = map[i..i+bs].try_into().unwrap();
+            let items = VectorType::new(unsafe {std::mem::transmute(buf)});
 
             if items.max(history) != history {
                 interesting = true;
                 unsafe {
-                    for j in i..(i + VectorType::LANES as usize / 2) {
+                    for j in i..(i + bs / 2) {
                         let item = *map.get_unchecked(j);
                         if item > *hist.get_unchecked(j) {
                             novelties.push(j);
                         }
                     }
 
-                    for j in (i + VectorType::LANES as usize / 2)..(i + VectorType::LANES as usize)
+                    for j in (i + bs / 2)..(i + bs as usize)
                     {
                         let item = *map.get_unchecked(j);
                         if item > *hist.get_unchecked(j) {
@@ -217,10 +221,12 @@ pub fn afl_stable_wide_256<const NV: bool>(hist: &[u8], map: &[u8]) -> (bool, Ve
         }
     } else {
         for step in 0..steps {
-            let i = step * VectorType::LANES as usize;
+            let i = step * bs;
+            let buf: [u8; bs] = hist[i..i+bs].try_into().unwrap();
             let history =
-                VectorType::new(hist[i..i + VectorType::LANES as usize].try_into().unwrap());
-            let items = VectorType::new(map[i..i + VectorType::LANES as usize].try_into().unwrap());
+                VectorType::new(unsafe {std::mem::transmute(buf)});
+            let buf: [u8; bs] = map[i..i+bs].try_into().unwrap();
+            let items = VectorType::new(unsafe {std::mem::transmute(buf)});
 
             if items.max(history) != history {
                 interesting = true;
