@@ -14,7 +14,7 @@ Complile with `RUSTFLAGS='-C target-cpu=native' cargo build --release`
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|16.380|10.333|9.470|10.554|
+|17.089|10.739|9.520|9.625|
 
 ## Benchmarks On Other Machines
 
@@ -22,19 +22,19 @@ On another AMD EPYC 7B13:
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|24.797|16.791|15.205|16.129|
+|24.965|16.575|15.310|15.688|
 
 On Oracle 4C24G aarch64 machine with `8192` repetitions.
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|12.540|3.120|2.924|2.821|
+|12.564|3.141|2.945|2.563|
 
 On m2 pro with `16384` repetitions (potentially inaccurate results due to core binding not available on macOS)
 
 |Naive|`std::simd::u8x16`|`wide::u8x16`|`wide::u8x32`|
 |-|-|-|-|
-|21.590|4.410|4.388|4.329|
+|21.373|4.617|4.365|3.984|
 
 To check correctness, build it with `cargo build --release --features correctness`
 
