@@ -121,18 +121,18 @@ pub fn afl_simplify_trace_wide128(map: &mut [u8]) {
 
 
 pub fn afl_simplify_trace_wide256(map: &mut [u8]) {
-    type VectorType = wide::u64x4;
+    type VectorType = wide::i8x32;
     let size = map.len();
-    const bs: usize = 8 * VectorType::LANES as usize;
+    const bs: usize = VectorType::LANES as usize;
     let steps = size / bs;
     let left = size % bs;
-    let lhs = VectorType::new([0x01010101010101; 4]);
-    let rhs = VectorType::new([0x80808080808080; 4]);
+    let lhs = VectorType::new([0x01; 32]);
+    let rhs = VectorType::new([-128; 32]);
 
     for step in 0..steps {
         let i = step * bs;
         let buf: [u8; 32] = map[i..i+bs].try_into().unwrap();
-        let mp = VectorType::new(unsafe {std::mem::transmute::<[u8; 32], [u64; 4]>(buf)});
+        let mp = VectorType::new(unsafe {std::mem::transmute::<[u8; 32], [i8; 32]>(buf)});
 
         let mask = mp.cmp_eq(VectorType::ZERO);
         // let out = lhs.blend(rhs, mask);

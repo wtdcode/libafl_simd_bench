@@ -114,7 +114,7 @@ where
             afl_simplify_trace_naive(&mut canonical);
 
             if map != &mut canonical {
-                panic!("Incorrect! {:?} vs {:?}", map, canonical);
+                panic!("Incorrect! {:?} vs\n{:?}", map, canonical);
             }
             outs.push(elp);
         }
